@@ -1,0 +1,14 @@
+{
+  "name": "discord-bot-protection",
+  "version": "1.0.0",
+  "description": "Bot de protection et modération Discord",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "deploy": "node src/deploy.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5"
+  }
+}
