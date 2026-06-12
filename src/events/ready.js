@@ -5,32 +5,38 @@ const config = require('../config');
 
 async function setupChannel(client, channelId, label, postFn) {
   if (!channelId) {
-    console.log(`[SETUP] ${label} : ID non configuré, ignoré.`);
+    console.log(`[SETUP] ⚠️  ${label} : CHANNEL ID non défini dans les variables d'environnement.`);
     return;
   }
 
-  const channel = client.channels.cache.get(channelId);
+  // Attendre que le canal soit en cache
+  let channel = client.channels.cache.get(channelId);
   if (!channel) {
-    console.log(`[SETUP] ${label} : salon introuvable (ID: ${channelId})`);
-    return;
-  }
-
-  try {
-    // Vérifier si le bot a déjà posté un embed dans ce salon
-    const messages = await channel.messages.fetch({ limit: 20 });
-    const alreadyPosted = messages.some(
-      m => m.author.id === client.user.id && m.embeds.length > 0
-    );
-
-    if (alreadyPosted) {
-      console.log(`[SETUP] ${label} : embed déjà présent, aucun doublon.`);
+    try {
+      channel = await client.channels.fetch(channelId);
+    } catch (err) {
+      console.log(`[SETUP] ❌ ${label} : impossible de trouver le salon (ID: ${channelId}) — ${err.message}`);
       return;
     }
+  }
 
+  // Supprimer les anciens messages du bot dans ce salon (évite les doublons)
+  try {
+    const messages = await channel.messages.fetch({ limit: 20 });
+    const botMessages = messages.filter(m => m.author.id === client.user.id);
+    for (const msg of botMessages.values()) {
+      await msg.delete().catch(() => {});
+    }
+  } catch {
+    // Pas grave si on ne peut pas supprimer
+  }
+
+  // Poster l'embed
+  try {
     await postFn(channel);
-    console.log(`[SETUP] ${label} : embed posté avec succès.`);
+    console.log(`[SETUP] ✅ ${label} : embed posté dans #${channel.name}`);
   } catch (err) {
-    console.error(`[SETUP] ${label} : erreur —`, err.message);
+    console.log(`[SETUP] ❌ ${label} : erreur lors du post — ${err.message}`);
   }
 }
 
@@ -38,17 +44,24 @@ module.exports = {
   name: 'ready',
   once: true,
   async execute(client) {
-    console.log(`[BOT] Connecté en tant que ${client.user.tag}`);
+    console.log(`[BOT] ✅ Connecté en tant que ${client.user.tag}`);
+    console.log(`[BOT] 🌐 ${client.guilds.cache.size} serveur(s)`);
 
     client.user.setPresence({
       activities: [{ name: '🛡️ Protection du serveur', type: ActivityType.Watching }],
       status: 'online',
     });
 
-    console.log(`[BOT] ${client.guilds.cache.size} serveur(s) protégé(s)`);
+    // Laisser le temps au cache de se charger
+    await new Promise(r => setTimeout(r, 2000));
 
-    // Poster automatiquement les embeds dans les bons salons
+    console.log('[SETUP] Démarrage de la configuration automatique...');
+    console.log(`[SETUP] REGLEMENT_CHANNEL_ID = ${config.REGLEMENT_CHANNEL_ID || 'NON DÉFINI'}`);
+    console.log(`[SETUP] TICKET_CHANNEL_ID    = ${config.TICKET_CHANNEL_ID || 'NON DÉFINI'}`);
+
     await setupChannel(client, config.REGLEMENT_CHANNEL_ID, '📜 Règlement', postReglementEmbed);
-    await setupChannel(client, config.TICKET_CHANNEL_ID, '🎟️ Tickets', postTicketEmbed);
+    await setupChannel(client, config.TICKET_CHANNEL_ID,    '🎟️ Tickets',   postTicketEmbed);
+
+    console.log('[SETUP] Configuration terminée.');
   },
 };
