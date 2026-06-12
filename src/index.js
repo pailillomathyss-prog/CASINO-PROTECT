@@ -43,17 +43,33 @@ for (const file of fs.readdirSync(eventsPath).filter(f => f.endsWith('.js'))) {
 
 // Déployer les slash commands automatiquement au démarrage
 client.once('ready', async () => {
-  if (!config.CLIENT_ID || !config.GUILD_ID) {
-    console.log('[SLASH] ⚠️  CLIENT_ID ou GUILD_ID non défini — slash commands non déployées.');
+  const clientId = config.CLIENT_ID;
+  const guildId  = config.GUILD_ID;
+
+  if (!clientId) {
+    console.log('[SLASH] ⚠️  CLIENT_ID manquant — slash commands non déployées.');
     return;
   }
+
   try {
     const rest = new REST().setToken(config.TOKEN);
-    await rest.put(
-      Routes.applicationGuildCommands(config.CLIENT_ID, config.GUILD_ID),
-      { body: slashCommands }
-    );
-    console.log(`[SLASH] ✅ ${slashCommands.length} commande(s) slash déployée(s) sur le serveur.`);
+
+    if (guildId) {
+      // Déploiement sur un serveur spécifique (instantané)
+      await rest.put(
+        Routes.applicationGuildCommands(clientId, guildId),
+        { body: slashCommands }
+      );
+      console.log(`[SLASH] ✅ ${slashCommands.length} commande(s) déployée(s) sur le serveur (GUILD_ID: ${guildId})`);
+    } else {
+      // Déploiement global (toutes les guildes, ~1h de propagation)
+      await rest.put(
+        Routes.applicationCommands(clientId),
+        { body: slashCommands }
+      );
+      console.log(`[SLASH] ✅ ${slashCommands.length} commande(s) déployée(s) globalement (visible dans ~1h)`);
+      console.log('[SLASH] 💡 Ajoute GUILD_ID dans Railway pour un déploiement instantané.');
+    }
   } catch (err) {
     console.error('[SLASH] ❌ Erreur de déploiement :', err.message);
   }
