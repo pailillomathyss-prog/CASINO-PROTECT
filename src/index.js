@@ -17,14 +17,14 @@ const client = new Client({
 
 client.commands = new Collection();
 
-// Charger les commandes
+// Charger les commandes (préfixe !)
 const commandsPath = path.join(__dirname, 'commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
 for (const file of commandFiles) {
   const command = require(path.join(commandsPath, file));
-  if (command.data && command.execute) {
-    client.commands.set(command.data.name, command);
-    console.log(`[CMD] Commande chargée : ${command.data.name}`);
+  if (command.name && command.run) {
+    client.commands.set(command.name, command);
+    console.log(`[CMD] Commande chargée : !${command.name}`);
   }
 }
 

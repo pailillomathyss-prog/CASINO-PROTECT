@@ -1,40 +1,35 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const { sendLog } = require('../systems/logs');
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('lock')
-    .setDescription('Verrouiller le salon actuel')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
-    .addStringOption(opt =>
-      opt.setName('raison').setDescription('Raison du verrouillage').setRequired(false)
-    ),
+  name: 'lock',
+  description: 'Verrouiller le salon actuel',
+  usage: '!lock [raison]',
+  permissions: [PermissionFlagsBits.ManageChannels],
 
-  async execute(interaction) {
-    const reason = interaction.options.getString('raison') || 'Aucune raison fournie';
-    const channel = interaction.channel;
+  async run(message, args) {
+    const reason = args.join(' ') || 'Aucune raison fournie';
+    const channel = message.channel;
 
     try {
-      await channel.permissionOverwrites.edit(interaction.guild.id, {
-        SendMessages: false,
-      });
+      await channel.permissionOverwrites.edit(message.guild.id, { SendMessages: false });
 
       const embed = new EmbedBuilder()
         .setTitle('🔒 Salon verrouillé')
-        .setDescription(`Ce salon a été verrouillé par ${interaction.user}.`)
+        .setDescription(`Ce salon a été verrouillé par ${message.author}.`)
         .setColor(0xFF4444)
         .addFields({ name: '📝 Raison', value: reason })
         .setTimestamp();
 
-      await interaction.reply({ embeds: [embed] });
+      await message.reply({ embeds: [embed] });
 
-      await sendLog(interaction.guild, 'LOCK', {
+      await sendLog(message.guild, 'LOCK', {
         channel,
-        moderator: interaction.user,
+        moderator: message.author,
         reason,
       });
     } catch (err) {
-      await interaction.reply({ content: `❌ Erreur : ${err.message}`, ephemeral: true });
+      message.reply(`❌ Erreur : ${err.message}`);
     }
   },
 };

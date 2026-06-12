@@ -1,34 +1,32 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const { sendLog } = require('../systems/logs');
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('unlock')
-    .setDescription('Déverrouiller le salon actuel')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+  name: 'unlock',
+  description: 'Déverrouiller le salon actuel',
+  usage: '!unlock',
+  permissions: [PermissionFlagsBits.ManageChannels],
 
-  async execute(interaction) {
-    const channel = interaction.channel;
+  async run(message) {
+    const channel = message.channel;
 
     try {
-      await channel.permissionOverwrites.edit(interaction.guild.id, {
-        SendMessages: null,
-      });
+      await channel.permissionOverwrites.edit(message.guild.id, { SendMessages: null });
 
       const embed = new EmbedBuilder()
         .setTitle('🔓 Salon déverrouillé')
-        .setDescription(`Ce salon a été déverrouillé par ${interaction.user}.`)
+        .setDescription(`Ce salon a été déverrouillé par ${message.author}.`)
         .setColor(0x44FF44)
         .setTimestamp();
 
-      await interaction.reply({ embeds: [embed] });
+      await message.reply({ embeds: [embed] });
 
-      await sendLog(interaction.guild, 'UNLOCK', {
+      await sendLog(message.guild, 'UNLOCK', {
         channel,
-        moderator: interaction.user,
+        moderator: message.author,
       });
     } catch (err) {
-      await interaction.reply({ content: `❌ Erreur : ${err.message}`, ephemeral: true });
+      message.reply(`❌ Erreur : ${err.message}`);
     }
   },
 };

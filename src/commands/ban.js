@@ -1,58 +1,42 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const { sendLog } = require('../systems/logs');
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('ban')
-    .setDescription('Bannir un membre du serveur')
-    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
-    .addUserOption(opt =>
-      opt.setName('membre').setDescription('Le membre à bannir').setRequired(true)
-    )
-    .addStringOption(opt =>
-      opt.setName('raison').setDescription('Raison du ban').setRequired(false)
-    )
-    .addIntegerOption(opt =>
-      opt.setName('jours').setDescription('Supprimer les messages des X derniers jours (0-7)').setMinValue(0).setMaxValue(7).setRequired(false)
-    ),
+  name: 'ban',
+  description: 'Bannir un membre du serveur',
+  usage: '!ban @membre [raison]',
+  permissions: [PermissionFlagsBits.BanMembers],
 
-  async execute(interaction) {
-    const target = interaction.options.getMember('membre');
-    const reason = interaction.options.getString('raison') || 'Aucune raison fournie';
-    const days = interaction.options.getInteger('jours') || 0;
+  async run(message, args) {
+    const target = message.mentions.members.first();
+    const reason = args.slice(1).join(' ') || 'Aucune raison fournie';
 
-    if (!target) {
-      return interaction.reply({ content: '❌ Membre introuvable.', ephemeral: true });
-    }
-    if (target.id === interaction.user.id) {
-      return interaction.reply({ content: '❌ Tu ne peux pas te bannir toi-même.', ephemeral: true });
-    }
-    if (!target.bannable) {
-      return interaction.reply({ content: '❌ Je ne peux pas bannir ce membre (rôle supérieur au mien).', ephemeral: true });
-    }
+    if (!target) return message.reply('❌ Mentionne un membre à bannir. Ex: `!ban @membre raison`');
+    if (target.id === message.author.id) return message.reply('❌ Tu ne peux pas te bannir toi-même.');
+    if (!target.bannable) return message.reply('❌ Je ne peux pas bannir ce membre (rôle supérieur au mien).');
 
     try {
-      await target.ban({ deleteMessageSeconds: days * 86400, reason: `${interaction.user.tag} : ${reason}` });
+      await target.ban({ reason: `${message.author.tag} : ${reason}` });
 
       const embed = new EmbedBuilder()
         .setTitle('🔨 Membre banni')
         .setColor(0xFF0000)
         .addFields(
           { name: '👤 Membre', value: `${target.user.tag}`, inline: true },
-          { name: '🛡️ Modérateur', value: `${interaction.user.tag}`, inline: true },
+          { name: '🛡️ Modérateur', value: `${message.author.tag}`, inline: true },
           { name: '📝 Raison', value: reason }
         )
         .setTimestamp();
 
-      await interaction.reply({ embeds: [embed], ephemeral: true });
+      await message.reply({ embeds: [embed] });
 
-      await sendLog(interaction.guild, 'BAN', {
+      await sendLog(message.guild, 'BAN', {
         target: target.user,
-        moderator: interaction.user,
+        moderator: message.author,
         reason,
       });
     } catch (err) {
-      await interaction.reply({ content: `❌ Erreur : ${err.message}`, ephemeral: true });
+      message.reply(`❌ Erreur : ${err.message}`);
     }
   },
 };

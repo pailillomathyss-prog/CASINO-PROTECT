@@ -1,55 +1,39 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { PermissionFlagsBits } = require('discord.js');
 const { postReglementEmbed } = require('../systems/reglement');
 const { postTicketEmbed } = require('../systems/ticket');
 const config = require('../config');
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('setup')
-    .setDescription('Configurer les embeds du bot (admin uniquement)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .addSubcommand(sub =>
-      sub.setName('reglement').setDescription('Poster l\'embed du règlement dans 📜・règlement')
-    )
-    .addSubcommand(sub =>
-      sub.setName('ticket').setDescription('Poster l\'embed des tickets dans 🎟️・ticket')
-    ),
+  name: 'setup',
+  description: 'Configurer les embeds du bot',
+  usage: '!setup <reglement|ticket>',
+  permissions: [PermissionFlagsBits.Administrator],
 
-  async execute(interaction) {
-    const sub = interaction.options.getSubcommand();
+  async run(message, args) {
+    const sub = args[0]?.toLowerCase();
+
+    if (!sub || !['reglement', 'ticket'].includes(sub)) {
+      return message.reply('❌ Utilise `!setup reglement` ou `!setup ticket`');
+    }
 
     if (sub === 'reglement') {
-      const channelId = config.REGLEMENT_CHANNEL_ID;
-      const channel = channelId
-        ? interaction.guild.channels.cache.get(channelId)
-        : interaction.channel;
+      const channel = config.REGLEMENT_CHANNEL_ID
+        ? message.guild.channels.cache.get(config.REGLEMENT_CHANNEL_ID)
+        : message.channel;
 
-      if (!channel) {
-        return interaction.reply({
-          content: '❌ Salon du règlement introuvable. Vérifie REGLEMENT_CHANNEL_ID dans ta config.',
-          ephemeral: true,
-        });
-      }
-
+      if (!channel) return message.reply('❌ Salon du règlement introuvable. Vérifie `REGLEMENT_CHANNEL_ID`.');
       await postReglementEmbed(channel);
-      await interaction.reply({ content: `✅ Embed du règlement posté dans ${channel} !`, ephemeral: true });
+      return message.reply(`✅ Embed du règlement posté dans ${channel} !`);
     }
 
     if (sub === 'ticket') {
-      const channelId = config.TICKET_CHANNEL_ID;
-      const channel = channelId
-        ? interaction.guild.channels.cache.get(channelId)
-        : interaction.channel;
+      const channel = config.TICKET_CHANNEL_ID
+        ? message.guild.channels.cache.get(config.TICKET_CHANNEL_ID)
+        : message.channel;
 
-      if (!channel) {
-        return interaction.reply({
-          content: '❌ Salon des tickets introuvable. Vérifie TICKET_CHANNEL_ID dans ta config.',
-          ephemeral: true,
-        });
-      }
-
+      if (!channel) return message.reply('❌ Salon des tickets introuvable. Vérifie `TICKET_CHANNEL_ID`.');
       await postTicketEmbed(channel);
-      await interaction.reply({ content: `✅ Embed des tickets posté dans ${channel} !`, ephemeral: true });
+      return message.reply(`✅ Embed des tickets posté dans ${channel} !`);
     }
   },
 };
