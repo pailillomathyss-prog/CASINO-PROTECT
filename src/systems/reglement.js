@@ -1,6 +1,6 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { sendLog } = require('./logs');
-const config = require('../config');
+const { getOrCreateVerifiedRole } = require('./roleManager');
 
 async function postReglementEmbed(channel) {
   const embed = new EmbedBuilder()
@@ -14,7 +14,7 @@ async function postReglementEmbed(channel) {
       '**5.** Suis les instructions des modérateurs sans discuter.\n' +
       '**6.** Aucune usurpation d\'identité.\n' +
       '**7.** Gardez les conversations dans les salons appropriés.\n\n' +
-      '> En cliquant sur le bouton ci-dessous, tu acceptes le règlement.'
+      '> En cliquant sur le bouton ci-dessous, tu acceptes le règlement et accèdes au serveur.'
     )
     .setColor(0x5865F2)
     .setFooter({ text: 'Clique sur le bouton pour obtenir accès au serveur.' })
@@ -31,26 +31,21 @@ async function postReglementEmbed(channel) {
 }
 
 async function handleReglementAccept(interaction) {
-  const roleId = config.VERIFIED_ROLE_ID;
-
-  if (!roleId) {
-    return interaction.reply({
-      content: '❌ Le rôle vérifié n\'est pas configuré. Contacte un administrateur.',
-      ephemeral: true,
-    });
-  }
-
+  const guild = interaction.guild;
   const member = interaction.member;
-  const role = interaction.guild.roles.cache.get(roleId);
 
-  if (!role) {
+  // Récupérer ou créer le rôle vérifié automatiquement
+  let role;
+  try {
+    role = await getOrCreateVerifiedRole(guild);
+  } catch (err) {
     return interaction.reply({
-      content: '❌ Rôle introuvable. Contacte un administrateur.',
+      content: '❌ Impossible de trouver ou créer le rôle de vérification. Vérifie les permissions du bot.',
       ephemeral: true,
     });
   }
 
-  if (member.roles.cache.has(roleId)) {
+  if (member.roles.cache.has(role.id)) {
     return interaction.reply({
       content: '✅ Tu as déjà accepté le règlement et tu as accès au serveur !',
       ephemeral: true,
@@ -61,17 +56,17 @@ async function handleReglementAccept(interaction) {
     await member.roles.add(role, 'Règlement accepté');
 
     await interaction.reply({
-      content: '🎉 **Bienvenue !** Tu as accepté le règlement et tu as maintenant accès au serveur. Amuse-toi bien !',
+      content: `🎉 **Bienvenue !** Tu as accepté le règlement et tu as maintenant accès au serveur. Amuse-toi bien !`,
       ephemeral: true,
     });
 
-    await sendLog(interaction.guild, 'REGLEMENT', {
+    await sendLog(guild, 'REGLEMENT', {
       user: interaction.user,
-      roleId,
+      roleId: role.id,
     });
   } catch (err) {
     await interaction.reply({
-      content: '❌ Impossible d\'attribuer le rôle. Vérifie que le bot a les permissions nécessaires.',
+      content: '❌ Impossible d\'attribuer le rôle. Vérifie que le rôle du bot est **au-dessus** du rôle "✅ Vérifié" dans la liste des rôles.',
       ephemeral: true,
     });
   }
