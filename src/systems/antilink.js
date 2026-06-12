@@ -1,7 +1,6 @@
 const { PermissionFlagsBits } = require('discord.js');
 const { sendLog } = require('./logs');
 
-// ── Tous les formats d'invitations Discord et liens externes ─────────────────
 const DISCORD_PATTERNS = [
   /discord\.gg\/[a-zA-Z0-9\-]+/i,
   /discord\.com\/invite\/[a-zA-Z0-9\-]+/i,
@@ -24,9 +23,6 @@ const OTHER_LINK_PATTERNS = [
   /https?:\/\/[^\s]+/i,
 ];
 
-const ALL_PATTERNS = [...DISCORD_PATTERNS, ...OTHER_LINK_PATTERNS];
-
-// Salons exemptés — ajoute des IDs ici si besoin
 const EXEMPT_CHANNEL_IDS = [];
 
 async function checkAntiLink(message) {
@@ -36,18 +32,17 @@ async function checkAntiLink(message) {
   const member = message.member;
   if (!member) return false;
 
-  // Exempter admins et modérateurs
+  // Exempter UNIQUEMENT les vrais admins/modérateurs
   if (member.permissions.has(PermissionFlagsBits.Administrator)) return false;
-  if (member.permissions.has(PermissionFlagsBits.ManageMessages)) return false;
+  if (member.permissions.has(PermissionFlagsBits.BanMembers)) return false;
+  if (member.permissions.has(PermissionFlagsBits.KickMembers)) return false;
 
-  // Salon exempté
   if (EXEMPT_CHANNEL_IDS.includes(message.channelId)) return false;
 
   const content = message.content;
   let detectedLink = null;
   let isDiscordInvite = false;
 
-  // Vérifier d'abord les invitations Discord (priorité haute)
   for (const pattern of DISCORD_PATTERNS) {
     const match = content.match(pattern);
     if (match) {
@@ -57,7 +52,6 @@ async function checkAntiLink(message) {
     }
   }
 
-  // Puis les autres liens
   if (!detectedLink) {
     for (const pattern of OTHER_LINK_PATTERNS) {
       const match = content.match(pattern);
@@ -70,21 +64,17 @@ async function checkAntiLink(message) {
 
   if (!detectedLink) return false;
 
-  // Vérifier que le bot peut supprimer des messages
+  // Supprimer le message
   const botMember = message.guild.members.me;
-  const canDelete = botMember && message.channel
-    .permissionsFor(botMember)
-    .has(PermissionFlagsBits.ManageMessages);
+  const canDelete = botMember &&
+    message.channel.permissionsFor(botMember).has(PermissionFlagsBits.ManageMessages);
 
   if (canDelete) {
-    await message.delete().catch(err =>
-      console.log(`[ANTI-LINK] Impossible de supprimer le message : ${err.message}`)
-    );
+    await message.delete().catch(() => {});
   } else {
-    console.log('[ANTI-LINK] ⚠️  Le bot n\'a pas la permission ManageMessages pour supprimer les messages.');
+    console.log('[ANTI-LINK] ⚠️  Permission ManageMessages manquante dans ce salon.');
   }
 
-  // Avertissement temporaire (5 secondes)
   const warningText = isDiscordInvite
     ? `> 🚫 **${message.author}**, les invitations Discord ne sont pas autorisées ici !`
     : `> ❌ **${message.author}**, les liens externes ne sont pas autorisés dans ce salon !`;
@@ -92,7 +82,6 @@ async function checkAntiLink(message) {
   const warning = await message.channel.send({ content: warningText }).catch(() => null);
   if (warning) setTimeout(() => warning.delete().catch(() => {}), 5000);
 
-  // Log
   await sendLog(message.guild, 'ANTILINK', {
     author: message.author,
     channel: message.channel,
