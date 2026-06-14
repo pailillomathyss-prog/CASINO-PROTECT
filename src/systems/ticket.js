@@ -11,25 +11,52 @@ const { sendLog } = require('./logs');
 const config = require('../config');
 
 const TICKET_REASONS = [
-  { label: '❓ Question générale', value: 'question', description: 'Une question sur le serveur ou la communauté' },
-  { label: '🔧 Problème technique', value: 'technique', description: 'Un bug ou problème technique' },
-  { label: '🚨 Signalement d\'un membre', value: 'signalement', description: 'Signaler un comportement inapproprié' },
-  { label: '⚖️ Contestation de sanction', value: 'sanction', description: 'Contester un ban, mute ou warn' },
-  { label: '🤝 Partenariat', value: 'partenariat', description: 'Proposer un partenariat' },
-  { label: '📦 Autre', value: 'autre', description: 'Autre demande' },
+  { label: '❓ Question générale',       value: 'question',    description: 'Une question sur le serveur ou la communauté' },
+  { label: '🔧 Problème technique',      value: 'technique',   description: 'Un bug ou problème technique' },
+  { label: '🚨 Signalement d\'un membre',value: 'signalement', description: 'Signaler un comportement inapproprié' },
+  { label: '⚖️ Contestation de sanction',value: 'sanction',    description: 'Contester un ban, mute ou warn' },
+  { label: '🤝 Partenariat',             value: 'partenariat', description: 'Proposer un partenariat' },
+  { label: '📦 Autre',                   value: 'autre',       description: 'Autre demande' },
 ];
 
 const REASON_LABELS = {
-  question: '❓ Question générale',
-  technique: '🔧 Problème technique',
-  signalement: '🚨 Signalement d\'un membre',
-  sanction: '⚖️ Contestation de sanction',
-  partenariat: '🤝 Partenariat',
-  autre: '📦 Autre',
+  question    : '❓ Question générale',
+  technique   : '🔧 Problème technique',
+  signalement : '🚨 Signalement d\'un membre',
+  sanction    : '⚖️ Contestation de sanction',
+  partenariat : '🤝 Partenariat',
+  autre       : '📦 Autre',
 };
 
 // Map pour éviter les tickets multiples : userId -> channelId
 const openTickets = new Map();
+
+/**
+ * Récupère tous les rôles staff qui doivent voir les tickets.
+ * Cherche : STAFF_ROLE_ID (config), "🎫 support", "support", "staff", "mod", "modérateur"
+ */
+function getStaffRoles(guild) {
+  const roles = [];
+
+  // Rôle depuis la config Railway/env
+  if (config.STAFF_ROLE_ID && guild.roles.cache.has(config.STAFF_ROLE_ID)) {
+    roles.push(config.STAFF_ROLE_ID);
+  }
+
+  // Recherche par nom (🎫 Support et variantes)
+  const keywords = ['🎫', 'support', 'staff', 'modo', 'modérateur', 'moderateur', 'admin'];
+  for (const role of guild.roles.cache.values()) {
+    const name = role.name.toLowerCase();
+    if (
+      !roles.includes(role.id) &&
+      keywords.some(kw => name.includes(kw))
+    ) {
+      roles.push(role.id);
+    }
+  }
+
+  return roles;
+}
 
 async function postTicketEmbed(channel) {
   const embed = new EmbedBuilder()
@@ -54,7 +81,6 @@ async function postTicketEmbed(channel) {
 }
 
 async function handleTicketOpen(interaction) {
-  // Vérifier si l'utilisateur a déjà un ticket ouvert
   const existingChannelId = openTickets.get(interaction.user.id);
   if (existingChannelId) {
     const existing = interaction.guild.channels.cache.get(existingChannelId);
@@ -68,7 +94,6 @@ async function handleTicketOpen(interaction) {
     }
   }
 
-  // Montrer le menu de sélection de raison (éphémère)
   const select = new StringSelectMenuBuilder()
     .setCustomId('ticket_reason')
     .setPlaceholder('Choisis une raison...')
@@ -87,12 +112,14 @@ async function handleTicketReason(interaction) {
   const reason = interaction.values[0];
   const reasonLabel = REASON_LABELS[reason] || reason;
   const guild = interaction.guild;
-  const user = interaction.user;
+  const user  = interaction.user;
 
-  // Créer le salon ticket
+  // Récupérer tous les rôles staff (dont 🎫 Support)
+  const staffRoleIds = getStaffRoles(guild);
+
   const categoryId = config.TICKET_CATEGORY_ID;
-  const staffRoleId = config.STAFF_ROLE_ID;
 
+  // Permissions de base : @everyone bloqué, user autorisé
   const permissionOverwrites = [
     {
       id: guild.id,
@@ -108,9 +135,10 @@ async function handleTicketReason(interaction) {
     },
   ];
 
-  if (staffRoleId && guild.roles.cache.has(staffRoleId)) {
+  // Ajouter chaque rôle staff avec accès complet
+  for (const roleId of staffRoleIds) {
     permissionOverwrites.push({
-      id: staffRoleId,
+      id: roleId,
       allow: [
         PermissionFlagsBits.ViewChannel,
         PermissionFlagsBits.SendMessages,
@@ -130,6 +158,7 @@ async function handleTicketReason(interaction) {
       topic: `Ticket de ${user.tag} — Raison: ${reasonLabel}`,
     });
   } catch (err) {
+    console.error('[TICKET] Erreur création :', err.message);
     return interaction.update({
       content: '❌ Impossible de créer le ticket. Vérifie les permissions du bot.',
       components: [],
@@ -138,7 +167,9 @@ async function handleTicketReason(interaction) {
 
   openTickets.set(user.id, ticketChannel.id);
 
-  // Embed dans le ticket
+  // Mention des rôles staff dans le salon du ticket
+  const mentions = staffRoleIds.map(id => `<@&${id}>`).join(' ');
+
   const ticketEmbed = new EmbedBuilder()
     .setTitle(`🎟️ Ticket — ${reasonLabel}`)
     .setDescription(
@@ -158,18 +189,16 @@ async function handleTicketReason(interaction) {
   );
 
   await ticketChannel.send({
-    content: staffRoleId ? `<@&${staffRoleId}>` : '',
+    content: mentions || '',
     embeds: [ticketEmbed],
     components: [closeRow],
   });
 
-  // Répondre à l'utilisateur (éphémère, met à jour le menu)
   await interaction.update({
     content: `✅ Ton ticket a été créé : ${ticketChannel}`,
     components: [],
   });
 
-  // Log
   await sendLog(guild, 'TICKET_OPEN', {
     user,
     channel: ticketChannel,
@@ -179,15 +208,22 @@ async function handleTicketReason(interaction) {
 
 async function handleTicketClose(interaction) {
   const channel = interaction.channel;
-  const guild = interaction.guild;
+  const guild   = interaction.guild;
 
-  // Récupérer l'utilisateur propriétaire du ticket
+  // Vérifier que c'est bien un ticket
+  if (!channel.name.startsWith('ticket-')) {
+    return interaction.reply({
+      content: '❌ Cette commande ne fonctionne que dans un ticket.',
+      ephemeral: true,
+    });
+  }
+
   let ticketOwnerTag = 'Inconnu';
-  let ticketOwnerId = null;
+  let ticketOwnerId  = null;
   for (const [userId, channelId] of openTickets.entries()) {
     if (channelId === channel.id) {
-      ticketOwnerId = userId;
-      const owner = guild.members.cache.get(userId);
+      ticketOwnerId  = userId;
+      const owner    = guild.members.cache.get(userId);
       if (owner) ticketOwnerTag = owner.user.tag;
       break;
     }
@@ -195,13 +231,11 @@ async function handleTicketClose(interaction) {
 
   if (ticketOwnerId) openTickets.delete(ticketOwnerId);
 
-  // Confirmer la fermeture (éphémère)
   await interaction.reply({
     content: '🔒 Fermeture du ticket dans 5 secondes...',
     ephemeral: true,
   });
 
-  // Log
   await sendLog(guild, 'TICKET_CLOSE', {
     user: ticketOwnerTag,
     closedBy: interaction.user,
