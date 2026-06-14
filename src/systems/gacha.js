@@ -6,8 +6,7 @@ const {
 } = require('discord.js');
 const { getBalance, deductDiamonds, hasFunds, GACHA_COST } = require('./economy');
 
-// guildId -> [ { roleId, roleName, rarity, emoji } ]
-const gachaPools = new Map();
+const gachaPools = new Map(); // guildId -> [ { roleId, roleName, rarity, emoji } ]
 
 const RARITIES = {
   commun     : { label: 'Commun',     emoji: '⬜', color: 0x95a5a6, weight: 60 },
@@ -41,24 +40,18 @@ function removeRoleFromPool(guildId, roleId) {
 function pickFromPool(guildId) {
   const pool = getPool(guildId);
   if (pool.length === 0) return null;
-
-  // Tirage pondéré par rareté
   const weighted = [];
   for (const entry of pool) {
     const w = RARITIES[entry.rarity]?.weight || 60;
     for (let i = 0; i < w; i++) weighted.push(entry);
   }
-
   return weighted[Math.floor(Math.random() * weighted.length)];
 }
 
 function buildGachaEmbed(guildId, guild) {
   const pool = getPool(guildId);
-
   const byRarity = { legendaire: [], epique: [], rare: [], commun: [] };
-  for (const r of pool) {
-    (byRarity[r.rarity] || byRarity.commun).push(r);
-  }
+  for (const r of pool) (byRarity[r.rarity] || byRarity.commun).push(r);
 
   const lines = [];
   for (const [rarity, entries] of Object.entries(byRarity)) {
@@ -76,7 +69,9 @@ function buildGachaEmbed(guildId, guild) {
     .setDescription(
       `Tente ta chance pour obtenir un rôle exclusif !\n\n` +
       `**Coût :** ${GACHA_COST} 💎 par tirage\n` +
-      (lines.length > 0 ? `\n**Rôles disponibles :**\n${lines.join('\n')}` : '\n*Aucun rôle configuré — utilise `!gacha addrole`*') +
+      (lines.length > 0
+        ? `\n**Rôles disponibles :**\n${lines.join('\n')}`
+        : '\n*Aucun rôle configuré — utilise `!gacha addrole`*') +
       `\n\u200B`
     )
     .setColor(0x9b59b6)
@@ -84,14 +79,35 @@ function buildGachaEmbed(guildId, guild) {
     .setTimestamp();
 }
 
-function buildGachaButton() {
+// ── Composants du panneau gacha (avec boutons solde/daily) ─────────────────
+
+function buildGachaComponents() {
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('gacha_pull')
+        .setLabel(`🎲 Tirer (${GACHA_COST} 💎)`)
+        .setStyle(ButtonStyle.Primary),
+    ),
+    buildEconomyRow(),
+  ];
+}
+
+// Ligne commune solde + daily (réutilisée dans tous les panneaux)
+function buildEconomyRow() {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId('gacha_pull')
-      .setLabel(`🎲 Tirer (${GACHA_COST} 💎)`)
-      .setStyle(ButtonStyle.Primary),
+      .setCustomId('casino_balance')
+      .setLabel('💎 Mon solde')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('casino_daily')
+      .setLabel('🎁 Daily gratuit')
+      .setStyle(ButtonStyle.Success),
   );
 }
+
+// ── Handler bouton Tirer ───────────────────────────────────────────────────
 
 async function handleGachaPull(interaction) {
   const user  = interaction.user;
@@ -99,7 +115,10 @@ async function handleGachaPull(interaction) {
 
   if (!hasFunds(user.id, GACHA_COST)) {
     return interaction.reply({
-      content: `❌ Tu n'as pas assez de 💎 ! Il te faut **${GACHA_COST} 💎**.\n💎 Ton solde : **${getBalance(user.id)} 💎**`,
+      content:
+        `❌ Tu n'as pas assez de 💎 !\n` +
+        `💎 Solde : **${getBalance(user.id)} 💎** — Requis : **${GACHA_COST} 💎**\n` +
+        `> Clique sur **🎁 Daily gratuit** pour en récupérer gratuitement !`,
       ephemeral: true,
     });
   }
@@ -116,8 +135,8 @@ async function handleGachaPull(interaction) {
   const picked  = pickFromPool(guild.id);
   const rarity  = RARITIES[picked.rarity];
   const member  = await guild.members.fetch(user.id).catch(() => null);
-
   let alreadyHad = false;
+
   if (member) {
     if (member.roles.cache.has(picked.roleId)) {
       alreadyHad = true;
@@ -127,11 +146,11 @@ async function handleGachaPull(interaction) {
   }
 
   const embed = new EmbedBuilder()
-    .setTitle(`${rarity.emoji} ${rarity.label.toUpperCase()} — Tu as obtenu un rôle !`)
+    .setTitle(`${rarity.emoji} ${rarity.label.toUpperCase()} — Rôle obtenu !`)
     .setDescription(
       `🎊 Félicitations ${user} !\n\n` +
       `Tu as tiré : **<@&${picked.roleId}>** ${rarity.emoji}\n` +
-      (alreadyHad ? `\n> *(Tu avais déjà ce rôle — tire encore !)*` : '') +
+      (alreadyHad ? `\n> *(Tu avais déjà ce rôle — retente !)*` : '') +
       `\n\n💎 Solde restant : **${getBalance(user.id)} 💎**`
     )
     .setColor(rarity.color)
@@ -139,23 +158,27 @@ async function handleGachaPull(interaction) {
 
   await interaction.reply({ embeds: [embed], ephemeral: true });
 
-  // Log dans #gains-pertes s'il existe
+  // Log dans le salon gains/pertes
   const logChannel = guild.channels.cache.find(c =>
-    ['gains', 'pertes', 'casino-log', 'résultats', 'resultats', 'gacha-log'].some(kw => c.name.toLowerCase().includes(kw))
+    ['gains', 'pertes', 'casino-log', 'résultats', 'resultats']
+      .some(kw => c.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes(kw.replace(/[^a-z0-9]/g, '')))
   );
   if (logChannel) {
-    const logEmbed = new EmbedBuilder()
-      .setAuthor({ name: user.tag, iconURL: user.displayAvatarURL() })
-      .setTitle(`🎲 Tirage gacha — ${rarity.emoji} ${rarity.label}`)
-      .setDescription(`<@${user.id}> a tiré **<@&${picked.roleId}>** !`)
-      .setColor(rarity.color)
-      .setTimestamp();
-    await logChannel.send({ embeds: [logEmbed] }).catch(() => {});
+    await logChannel.send({
+      embeds: [
+        new EmbedBuilder()
+          .setAuthor({ name: user.tag, iconURL: user.displayAvatarURL() })
+          .setTitle(`🎲 Tirage Gacha — ${rarity.emoji} ${rarity.label}`)
+          .setDescription(`<@${user.id}> a tiré **<@&${picked.roleId}>** !`)
+          .setColor(rarity.color)
+          .setTimestamp(),
+      ],
+    }).catch(() => {});
   }
 }
 
 module.exports = {
   addRoleToPool, removeRoleFromPool, getPool,
-  buildGachaEmbed, buildGachaButton,
+  buildGachaEmbed, buildGachaComponents, buildEconomyRow,
   handleGachaPull,
 };
