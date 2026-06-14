@@ -5,6 +5,7 @@ const {
   ButtonStyle,
 } = require('discord.js');
 const { getBalance, deductDiamonds, hasFunds, GACHA_COST } = require('./economy');
+const { getGainsChannel } = require('./guildConfig');
 
 const gachaPools = new Map(); // guildId -> [ { roleId, roleName, rarity, emoji } ]
 
@@ -159,10 +160,7 @@ async function handleGachaPull(interaction) {
   await interaction.reply({ embeds: [embed], ephemeral: true });
 
   // Log dans le salon gains/pertes
-  const logChannel = guild.channels.cache.find(c =>
-    ['gains', 'pertes', 'casino-log', 'résultats', 'resultats']
-      .some(kw => c.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes(kw.replace(/[^a-z0-9]/g, '')))
-  );
+  const logChannel = getGainsChannel(guild);
   if (logChannel) {
     await logChannel.send({
       embeds: [
