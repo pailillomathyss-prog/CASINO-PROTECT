@@ -175,8 +175,27 @@ async function handleGachaPull(interaction) {
   }
 }
 
+/**
+ * Calcule le % individuel de chaque rôle dans le pool.
+ * Tient compte du nombre de rôles par rareté.
+ * Retourne un tableau : [ { ...entry, percent: "12.5" }, ... ]
+ */
+function calculatePoolChances(guildId) {
+  const pool = getPool(guildId);
+  if (pool.length === 0) return [];
+
+  const totalWeight = pool.reduce((sum, e) => sum + (RARITIES[e.rarity]?.weight || 60), 0);
+
+  return pool.map(entry => {
+    const w       = RARITIES[entry.rarity]?.weight || 60;
+    const percent = ((w / totalWeight) * 100).toFixed(1);
+    return { ...entry, percent };
+  });
+}
+
 module.exports = {
   addRoleToPool, removeRoleFromPool, getPool,
   buildGachaEmbed, buildGachaComponents, buildEconomyRow,
-  handleGachaPull,
+  handleGachaPull, calculatePoolChances,
+  RARITIES,
 };
