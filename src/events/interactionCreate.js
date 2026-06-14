@@ -1,7 +1,12 @@
-const { handleReglementAccept } = require('../systems/reglement');
+const { handleReglementAccept }   = require('../systems/reglement');
 const { handleTicketOpen, handleTicketReason, handleTicketClose } = require('../systems/ticket');
-const { handleGiveawayEnter } = require('../systems/giveaway');
-const { handleScratchCell, handleScratchReplay, handleScratchClose } = require('../systems/scratchcard');
+const { handleGiveawayEnter }     = require('../systems/giveaway');
+const {
+  handleCasinoStartScratch,
+  handleScratchCell,
+  handleScratchReplay,
+  handleScratchClose,
+} = require('../systems/scratchcard');
 const { handleGachaPull } = require('../systems/gacha');
 
 module.exports = {
@@ -27,19 +32,27 @@ module.exports = {
     if (interaction.isButton()) {
       const id = interaction.customId;
 
-      if (id === 'reglement_accept')              return handleReglementAccept(interaction);
-      if (id === 'ticket_open')                   return handleTicketOpen(interaction);
-      if (id === 'ticket_close')                  return handleTicketClose(interaction);
-      if (id === 'giveaway_enter')                return handleGiveawayEnter(interaction);
-      if (id === 'scratch_replay')                return handleScratchReplay(interaction);
-      if (id === 'scratch_close')                 return handleScratchClose(interaction);
-      if (id === 'gacha_pull')                    return handleGachaPull(interaction);
+      // Règlement & Tickets
+      if (id === 'reglement_accept')     return handleReglementAccept(interaction);
+      if (id === 'ticket_open')          return handleTicketOpen(interaction);
+      if (id === 'ticket_close')         return handleTicketClose(interaction);
 
-      // Animation scratch : scratch_cell_0 / scratch_cell_1 / scratch_cell_2
+      // Giveaway
+      if (id === 'giveaway_enter')       return handleGiveawayEnter(interaction);
+
+      // Casino — démarrage depuis le panneau (bouton sur l'embed posté par !casino scratch)
+      if (id === 'casino_start_scratch') return handleCasinoStartScratch(interaction);
+
+      // Casino — animation grattage dans le salon privé
+      if (id === 'scratch_replay')       return handleScratchReplay(interaction);
+      if (id === 'scratch_close')        return handleScratchClose(interaction);
       if (id.startsWith('scratch_cell_')) {
         const cellIndex = parseInt(id.split('_')[2]);
         return handleScratchCell(interaction, cellIndex);
       }
+
+      // Gacha
+      if (id === 'gacha_pull')           return handleGachaPull(interaction);
     }
 
     // ── Select Menus ──────────────────────────────────────────────────────────
