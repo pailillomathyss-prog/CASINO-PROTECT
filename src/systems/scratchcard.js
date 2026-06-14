@@ -6,6 +6,7 @@ const {
 } = require('discord.js');
 const { getBalance, deductDiamonds, addDiamonds, hasFunds, SCRATCH_COST } = require('./economy');
 const { buildEconomyRow } = require('./gacha');
+const { getGainsChannel } = require('./guildConfig');
 
 // État du grattage en cours : messageId -> { cells, revealed, userId }
 const scratchState = new Map();
@@ -288,10 +289,7 @@ async function handleScratchClose(interaction) {
 // ── Résultats dans le salon public séparé ─────────────────────────────────────
 
 async function postResultToGainsChannel(guild, user, cells, result) {
-  const ch = guild.channels.cache.find(c =>
-    ['gains', 'pertes', 'gains-pertes', 'casino-log', 'résultats', 'resultats']
-      .some(kw => c.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes(kw.replace(/[^a-z0-9]/g, '')))
-  );
+  const ch = getGainsChannel(guild);
   if (!ch) return;
 
   const net = result.gain - SCRATCH_COST;
