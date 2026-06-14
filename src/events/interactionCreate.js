@@ -1,7 +1,7 @@
 const { handleReglementAccept } = require('../systems/reglement');
 const { handleTicketOpen, handleTicketReason, handleTicketClose } = require('../systems/ticket');
 const { handleGiveawayEnter } = require('../systems/giveaway');
-const { handleScratchPlay, handleScratchReplay, handleScratchClose } = require('../systems/scratchcard');
+const { handleScratchCell, handleScratchReplay, handleScratchClose } = require('../systems/scratchcard');
 const { handleGachaPull } = require('../systems/gacha');
 
 module.exports = {
@@ -25,14 +25,21 @@ module.exports = {
 
     // ── Boutons ───────────────────────────────────────────────────────────────
     if (interaction.isButton()) {
-      if (interaction.customId === 'reglement_accept') return handleReglementAccept(interaction);
-      if (interaction.customId === 'ticket_open')      return handleTicketOpen(interaction);
-      if (interaction.customId === 'ticket_close')     return handleTicketClose(interaction);
-      if (interaction.customId === 'giveaway_enter')   return handleGiveawayEnter(interaction);
-      if (interaction.customId === 'scratch_play')     return handleScratchPlay(interaction);
-      if (interaction.customId === 'scratch_replay')   return handleScratchReplay(interaction);
-      if (interaction.customId === 'scratch_close')    return handleScratchClose(interaction);
-      if (interaction.customId === 'gacha_pull')       return handleGachaPull(interaction);
+      const id = interaction.customId;
+
+      if (id === 'reglement_accept')              return handleReglementAccept(interaction);
+      if (id === 'ticket_open')                   return handleTicketOpen(interaction);
+      if (id === 'ticket_close')                  return handleTicketClose(interaction);
+      if (id === 'giveaway_enter')                return handleGiveawayEnter(interaction);
+      if (id === 'scratch_replay')                return handleScratchReplay(interaction);
+      if (id === 'scratch_close')                 return handleScratchClose(interaction);
+      if (id === 'gacha_pull')                    return handleGachaPull(interaction);
+
+      // Animation scratch : scratch_cell_0 / scratch_cell_1 / scratch_cell_2
+      if (id.startsWith('scratch_cell_')) {
+        const cellIndex = parseInt(id.split('_')[2]);
+        return handleScratchCell(interaction, cellIndex);
+      }
     }
 
     // ── Select Menus ──────────────────────────────────────────────────────────
