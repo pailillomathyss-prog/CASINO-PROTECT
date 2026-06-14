@@ -1,5 +1,6 @@
 const { handleReglementAccept } = require('../systems/reglement');
 const { handleTicketOpen, handleTicketReason, handleTicketClose } = require('../systems/ticket');
+const { handleGiveawayEnter } = require('../systems/giveaway');
 
 module.exports = {
   name: 'interactionCreate',
@@ -27,8 +28,9 @@ module.exports = {
     // ── Boutons ───────────────────────────────────────────────────────────────
     if (interaction.isButton()) {
       if (interaction.customId === 'reglement_accept') return handleReglementAccept(interaction);
-      if (interaction.customId === 'ticket_open') return handleTicketOpen(interaction);
-      if (interaction.customId === 'ticket_close') return handleTicketClose(interaction);
+      if (interaction.customId === 'ticket_open')      return handleTicketOpen(interaction);
+      if (interaction.customId === 'ticket_close')     return handleTicketClose(interaction);
+      if (interaction.customId === 'giveaway_enter')   return handleGiveawayEnter(interaction);
     }
 
     // ── Select Menus ──────────────────────────────────────────────────────────
